@@ -1,0 +1,64 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Venue {
+  id        Int       @id @default(autoincrement())
+  name      String
+  slug      String    @unique
+  bays      Bay[]
+  bookings  Booking[]
+  createdAt DateTime  @default(now())
+}
+
+model User {
+  id        Int       @id @default(autoincrement())
+  email     String    @unique
+  name      String?
+  bookings  Booking[]
+  createdAt DateTime  @default(now())
+}
+
+model Bay {
+  id        Int       @id @default(autoincrement())
+  name      String
+  venueId   Int
+  venue     Venue     @relation(fields: [venueId], references: [id])
+  bookings  Booking[]
+  createdAt DateTime  @default(now())
+}
+
+model Booking {
+  id        Int            @id @default(autoincrement())
+  userId    Int
+  bayId     Int
+  venueId  Int
+  startAt   DateTime
+  endAt     DateTime
+  status    BookingStatus @default(CONFIRMED)
+
+  user      User    @relation(fields: [userId], references: [id])
+  bay       Bay     @relation(fields: [bayId], references: [id])
+  venue     Venue   @relation(fields: [venueId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([bayId, startAt, endAt])
+}
+
+enum BookingStatus {
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
