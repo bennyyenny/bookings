@@ -46,6 +46,11 @@ export class BookingController {
     return this.bookingService.findOne(Number(id));
   }
 
+  @Get('venue/:venueId')
+  findByVenue(@Param('venueId') venueId: string) {
+    return this.bookingService.findByVenue(Number(venueId));
+  }
+
   @Patch(':id')
   update(@Param('id') id: string, @Body() body: Prisma.BookingUpdateInput) {
     return this.bookingService.update(Number(id), body);

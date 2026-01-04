@@ -8,7 +8,6 @@ export class BookingService {
 
   // Create a booking with availability check
   async create(data: Prisma.BookingCreateInput): Promise<Booking> {
-    // Safely extract IDs
     const bayId = data.bay?.connect?.id;
     const userId = data.user?.connect?.id;
     const venueId = data.venue?.connect?.id;
@@ -17,12 +16,22 @@ export class BookingService {
       throw new BadRequestException('User, Bay, and Venue must be connected.');
     }
 
+    // Convert start/end to Date objects
+    const startAt = new Date(data.startAt as unknown as string);
+    const endAt = new Date(data.endAt as unknown as string);
+
+    if (isNaN(startAt.getTime()) || isNaN(endAt.getTime())) {
+      throw new BadRequestException(
+        `Invalid date: startAt=${data.startAt}, endAt=${data.endAt}`,
+      );
+    }
+
     // Check if bay is available
     const overlapping = await this.prisma.booking.findFirst({
       where: {
         bayId,
-        startAt: { lt: data.endAt },
-        endAt: { gt: data.startAt },
+        startAt: { lt: endAt }, // use Date objects
+        endAt: { gt: startAt },
       },
     });
 
@@ -38,7 +47,11 @@ export class BookingService {
     }
 
     return this.prisma.booking.create({
-      data,
+      data: {
+        ...data,
+        startAt,
+        endAt,
+      },
       include: { user: true, bay: true, venue: true },
     });
   }
@@ -53,6 +66,13 @@ export class BookingService {
     return this.prisma.booking.findUnique({
       where: { id },
       include: { user: true, bay: true, venue: true },
+    });
+  }
+
+  findByVenue(venueId: number): Promise<Booking[]> {
+    return this.prisma.booking.findMany({
+      where: { venueId },
+      include: { user: true, bay: true }, // include whatever relations you need
     });
   }
 
