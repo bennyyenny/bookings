@@ -6,7 +6,6 @@ import { Prisma, Booking, BookingStatus } from '../generated/prisma/client.js';
 export class BookingService {
   constructor(private prisma: PrismaService) {}
 
-  // Create a booking with availability check
   async create(data: Prisma.BookingCreateInput): Promise<Booking> {
     const bayId = data.bay?.connect?.id;
     const userId = data.user?.connect?.id;
@@ -16,7 +15,6 @@ export class BookingService {
       throw new BadRequestException('User, Bay, and Venue must be connected.');
     }
 
-    // Convert start/end to Date objects
     const startAt = new Date(data.startAt as unknown as string);
     const endAt = new Date(data.endAt as unknown as string);
 
@@ -30,7 +28,7 @@ export class BookingService {
     const overlapping = await this.prisma.booking.findFirst({
       where: {
         bayId,
-        startAt: { lt: endAt }, // use Date objects
+        startAt: { lt: endAt },
         endAt: { gt: startAt },
       },
     });
@@ -41,7 +39,6 @@ export class BookingService {
       );
     }
 
-    // Ensure default status
     if (!data.status) {
       data.status = BookingStatus.CONFIRMED;
     }
@@ -72,21 +69,7 @@ export class BookingService {
   findByVenue(venueId: number): Promise<Booking[]> {
     return this.prisma.booking.findMany({
       where: { venueId },
-      include: { user: true, bay: true }, // include whatever relations you need
-    });
-  }
-
-  update(id: number, data: Prisma.BookingUpdateInput): Promise<Booking> {
-    return this.prisma.booking.update({
-      where: { id },
-      data,
-      include: { user: true, bay: true, venue: true },
-    });
-  }
-
-  remove(id: number): Promise<Booking> {
-    return this.prisma.booking.delete({
-      where: { id },
+      include: { user: true, bay: true },
     });
   }
 
@@ -102,5 +85,17 @@ export class BookingService {
       where: { bayId },
       include: { user: true, venue: true },
     });
+  }
+
+  update(id: number, data: Prisma.BookingUpdateInput): Promise<Booking> {
+    return this.prisma.booking.update({
+      where: { id },
+      data,
+      include: { user: true, bay: true, venue: true },
+    });
+  }
+
+  remove(id: number): Promise<Booking> {
+    return this.prisma.booking.delete({ where: { id } });
   }
 }

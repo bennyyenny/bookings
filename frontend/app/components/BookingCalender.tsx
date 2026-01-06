@@ -10,9 +10,9 @@ import {
 import { format, parse, startOfWeek, getDay, addMinutes } from "date-fns";
 import enUS from "date-fns/locale/en-US";
 import "react-big-calendar/lib/css/react-big-calendar.css";
+import { useSession, signIn } from "next-auth/react";
 
 type Bay = { id: number; name: string };
-
 type Booking = {
   id: number;
   bayId: number;
@@ -36,37 +36,32 @@ interface BookingCalendarProps {
 }
 
 export default function BookingCalendar({ venueSlug }: BookingCalendarProps) {
+  const { data: session } = useSession();
   const [venueId, setVenueId] = useState<number | null>(null);
   const [bays, setBays] = useState<Bay[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [tempSlot, setTempSlot] = useState<Booking | null>(null);
-  const [selectedBayId, setSelectedBayId] = useState<number | null>(null);
 
-  // Fetch venue ID
+  // 1️⃣ Fetch venue ID
   useEffect(() => {
     fetch(`http://localhost:3000/venues/${venueSlug}`)
       .then((res) => res.json())
-      .then((venue) => {
-        if (venue?.id) setVenueId(venue.id);
-        else console.error("Venue not found");
-      })
+      .then((venue) => setVenueId(venue.id))
       .catch(console.error);
   }, [venueSlug]);
 
-  // Fetch bays
+  // 2️⃣ Fetch bays
   useEffect(() => {
     if (!venueId) return;
-
     fetch(`http://localhost:3000/bays/venue/${venueId}`)
       .then((res) => res.json())
       .then((data) => setBays(Array.isArray(data) ? data : []))
       .catch(console.error);
   }, [venueId]);
 
-  // Fetch bookings after bays are loaded
+  // 3️⃣ Fetch bookings
   useEffect(() => {
     if (!venueId || bays.length === 0) return;
-
     fetch(`http://localhost:3000/bookings/venue/${venueId}`)
       .then((res) => res.json())
       .then((data) => {
@@ -81,34 +76,15 @@ export default function BookingCalendar({ venueSlug }: BookingCalendarProps) {
             resourceId: b.bayId,
           }));
           setBookings(mappedBookings);
-        } else {
-          setBookings([]);
         }
       })
       .catch(console.error);
   }, [venueId, bays]);
 
-  console.log(bookings, "yo");
   const resources = bays.map((bay) => ({ id: bay.id, title: bay.name }));
-
-  const eventPropGetter = (event: Booking) => {
-    if (tempSlot && event.id === tempSlot.id) {
-      return {
-        style: {
-          backgroundColor: "#3174ad",
-          border: "2px solid #1e4d7a",
-          opacity: 0.9,
-          color: "white",
-          fontWeight: "bold" as const,
-        },
-      };
-    }
-    return {};
-  };
 
   const handleSelectSlot = (slotInfo: SlotInfo) => {
     if (!slotInfo.resourceId) return;
-
     const bay = bays.find((b) => b.id === slotInfo.resourceId);
     if (!bay) return;
 
@@ -120,43 +96,61 @@ export default function BookingCalendar({ venueSlug }: BookingCalendarProps) {
       title: `New Booking - ${bay.name}`,
       resourceId: bay.id,
     });
-
-    setSelectedBayId(bay.id);
   };
 
-  const handleBook = () => {
+  const handleBook = async () => {
     if (!tempSlot || !venueId) return;
 
-    fetch("http://localhost:3000/bookings", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        bayId: tempSlot.bayId,
-        userId: 1,
-        venueId,
-        startAt: tempSlot.start.toISOString(),
-        endAt: tempSlot.end.toISOString(),
-      }),
-    })
-      .then((res) => res.json())
-      .then((createdBooking) => {
-        const bayName =
-          bays.find((b) => b.id === createdBooking.bayId)?.name ||
-          `Bay ${createdBooking.bayId}`;
-        setBookings((prev) => [
-          ...prev,
-          {
-            id: createdBooking.id,
-            bayId: createdBooking.bayId,
-            start: new Date(createdBooking.startAt),
-            end: new Date(createdBooking.endAt),
-            title: bayName,
-            resourceId: createdBooking.bayId,
-          },
-        ]);
-        setTempSlot(null);
-      })
-      .catch(console.error);
+    // 1️⃣ Check if user is logged in
+    if (!session?.user?.email) {
+      signIn(); // redirect to login
+      return;
+    }
+
+    try {
+      // 2️⃣ Get userId from backend
+      const userRes = await fetch(
+        `http://localhost:3000/users/by-email/${session.user.email}`
+      );
+      if (!userRes.ok) throw new Error("User not found");
+      const { id: userId } = await userRes.json();
+
+      // 3️⃣ Create booking
+      const bookingRes = await fetch("http://localhost:3000/bookings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bayId: tempSlot.bayId,
+          venueId,
+          userId,
+          startAt: tempSlot.start.toISOString(),
+          endAt: tempSlot.end.toISOString(),
+        }),
+      });
+
+      if (!bookingRes.ok) {
+        const errText = await bookingRes.text();
+        throw new Error(errText);
+      }
+
+      const createdBooking = await bookingRes.json();
+
+      setBookings((prev) => [
+        ...prev,
+        {
+          id: createdBooking.id,
+          bayId: createdBooking.bayId,
+          start: new Date(createdBooking.startAt),
+          end: new Date(createdBooking.endAt),
+          title: createdBooking.bay.name,
+          resourceId: createdBooking.bayId,
+        },
+      ]);
+
+      setTempSlot(null);
+    } catch (err: any) {
+      alert(err.message || "Booking failed");
+    }
   };
 
   const handleIncrement = () => {
@@ -164,10 +158,7 @@ export default function BookingCalendar({ venueSlug }: BookingCalendarProps) {
     setTempSlot({ ...tempSlot, end: addMinutes(tempSlot.end, 15) });
   };
 
-  const handleCancel = () => {
-    setTempSlot(null);
-    setSelectedBayId(null);
-  };
+  const handleCancel = () => setTempSlot(null);
 
   return (
     <div style={{ height: 700, padding: "20px" }}>
@@ -184,8 +175,6 @@ export default function BookingCalendar({ venueSlug }: BookingCalendarProps) {
         step={15}
         timeslots={4}
         style={{ height: "100%" }}
-        eventPropGetter={eventPropGetter}
-        slotPropGetter={() => ({ style: { backgroundColor: "#f8fdff" } })}
       />
 
       {tempSlot && (

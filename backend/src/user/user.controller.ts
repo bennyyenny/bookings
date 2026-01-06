@@ -32,6 +32,11 @@ export class UserController {
     return this.userService.findOne(Number(id));
   }
 
+  @Get('by-email/:email')
+  findByEmail(@Param('email') email: string) {
+    return this.userService.findByEmail(email);
+  }
+
   @Patch(':id')
   update(
     @Param('id') id: string,

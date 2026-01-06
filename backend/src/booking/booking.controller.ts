@@ -31,8 +31,8 @@ export class BookingController {
       user: { connect: { id: userId } },
       bay: { connect: { id: bayId } },
       venue: { connect: { id: venueId } },
-      startAt: new Date(startAt),
-      endAt: new Date(endAt),
+      startAt,
+      endAt,
     });
   }
 
@@ -51,16 +51,6 @@ export class BookingController {
     return this.bookingService.findByVenue(Number(venueId));
   }
 
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() body: Prisma.BookingUpdateInput) {
-    return this.bookingService.update(Number(id), body);
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.bookingService.remove(Number(id));
-  }
-
   @Get('user/:userId')
   findByUser(@Param('userId') userId: string) {
     return this.bookingService.findByUser(Number(userId));
@@ -69,5 +59,15 @@ export class BookingController {
   @Get('bay/:bayId')
   findByBay(@Param('bayId') bayId: string) {
     return this.bookingService.findByBay(Number(bayId));
+  }
+
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() body: Prisma.BookingUpdateInput) {
+    return this.bookingService.update(Number(id), body);
+  }
+
+  @Delete(':id')
+  remove(@Param('id') id: string) {
+    return this.bookingService.remove(Number(id));
   }
 }
